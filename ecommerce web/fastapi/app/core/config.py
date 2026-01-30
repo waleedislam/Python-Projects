@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
 class Settings(BaseSettings):
     # -------------------------
     # Database
@@ -36,8 +35,9 @@ class Settings(BaseSettings):
     # -------------------------
     @property
     def DATABASE_URL(self) -> str:
+        # PostgreSQL async URL using asyncpg
         return (
-            f"mysql+aiomysql://{self.DB_USER}:"
+            f"postgresql+asyncpg://{self.DB_USER}:"
             f"{self.DB_PASS}@"
             f"{self.DB_HOST}:"
             f"{self.DB_PORT}/"
@@ -47,12 +47,11 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra = "forbid"   # keep strict 🔒
+        extra = "forbid"  # strict
 
-
+# Cache settings so they are only loaded once
 @lru_cache
 def get_settings():
     return Settings()
-
 
 settings = get_settings()
