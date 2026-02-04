@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from app.product.models import Category
+from app.product.models import Category, Product
 from app.product.schemas import CategoryCreate
 from app.product.schemas import ProductBase,PaginatedProductOut,ProductOut,ProductCreate,ProductUpdate
+from app.product.utils import generate_slug, save_upload_file
 
 async def create_category_in_db(
     session: AsyncSession,
@@ -57,6 +58,9 @@ async def delete_category(session:AsyncSession,category_id:int):
 async def Create_product(session:AsyncSession,data:ProductCreate,image_url:UploadFile | None=None):
     if data.stock_quantity<0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Stock Quantity can't be negative")
+    
+    image_path = await save_upload_file(image_url,"images")
+
     categories=[]
     if data.category_ids:
         category_stmt = select(Category).where(Category.id.in_(data.category_ids)) 
@@ -64,3 +68,12 @@ async def Create_product(session:AsyncSession,data:ProductCreate,image_url:Uploa
         categories = category_result.scalars().all()
 
     product_dict = data.model_dump(exclude={"category_ids"})
+    if not product_dict.get("slug"):
+       product_dict["slug"]=generate_slug(product_dict.get("title")) 
+
+    new_product = Product(**product_dict,image_url=image_path,categories=categories)
+    session.add(new_product)   
+    await session.commit()
+    await session.refresh(new_product)
+    return new_product
+

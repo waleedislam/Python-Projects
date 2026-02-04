@@ -23,7 +23,7 @@ app.include_router(
 )
 
 app.include_router(
-    category_router,
+    prod_router,
     prefix="/api/products",
     tags=["Products"]
 )
