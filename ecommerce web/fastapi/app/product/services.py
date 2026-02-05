@@ -2,7 +2,8 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from app.product.models import Category, Product
 from app.product.schemas import CategoryCreate
 from app.product.schemas import ProductBase,PaginatedProductOut,ProductOut,ProductCreate,ProductUpdate
@@ -77,3 +78,84 @@ async def Create_product(session:AsyncSession,data:ProductCreate,image_url:Uploa
     await session.refresh(new_product)
     return new_product
 
+
+async def get_products_service(
+    session: AsyncSession,
+    page: int,
+    limit: int,
+    search: str | None,
+    category_id: int | None,
+    min_price: float | None,
+    max_price: float | None,
+    sort: str | None,
+):
+    stmt = select(Product).options(
+        selectinload(Product.categories)
+    )
+
+    # SEARCH
+    if search:
+        stmt = stmt.where(Product.title.ilike(f"%{search}%"))
+
+    # CATEGORY FILTER
+    if category_id:
+        stmt = stmt.join(Product.categories).where(
+            Category.id == category_id
+        )
+
+    # PRICE FILTER
+    if min_price is not None:
+        stmt = stmt.where(Product.price >= min_price)
+
+    if max_price is not None:
+        stmt = stmt.where(Product.price <= max_price)
+
+    # SORTING
+    if sort == "price_asc":
+        stmt = stmt.order_by(Product.price.asc())
+    elif sort == "price_desc":
+        stmt = stmt.order_by(Product.price.desc())
+    else:
+        stmt = stmt.order_by(Product.id.desc())
+
+    # TOTAL COUNT
+    total_stmt = select(func.count()).select_from(stmt.subquery())
+    total_result = await session.execute(total_stmt)
+    total = total_result.scalar()
+
+    # PAGINATION
+    stmt = stmt.offset((page - 1) * limit).limit(limit)
+
+    result = await session.execute(stmt)
+    products = result.scalars().unique().all()
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "items": products,
+    }
+
+
+async def get_product_by_slug_service(
+    session: AsyncSession,
+    slug: str,
+):
+    stmt = (
+        select(Product)
+        .where(Product.slug == slug)
+        .options(
+            selectinload(Product.categories)
+        )
+    )
+
+    result = await session.execute(stmt)
+    product = result.scalar_one_or_none()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
+
+    return product

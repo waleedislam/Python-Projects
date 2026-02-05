@@ -1,6 +1,7 @@
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from app.core.security import create_access_token, hash_password, verify_password
-from app.db.config import SessionDep
+from app.db.session import SessionDep,AsyncSession
 from app.user.deps import get_current_user
 from app.user.models import User
 from app.user.schemas import UserLogin, UserOut, UserSignup
@@ -25,16 +26,19 @@ async def signup(user_data: UserSignup, session: SessionDep):
     return user
 
 @router.post("/login")
-async def login(user_data: UserLogin, session: SessionDep):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: AsyncSession = Depends(SessionDep),
+):
     result = await session.execute(
-        select(User).where(User.email == user_data.email)
+        select(User).where(User.email == form_data.username)
     )
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(user_data.password, user.password_hash):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": user.id, "role": user.role})
+    token = create_access_token({"sub": str(user.id), "role": user.role})
     return {"access_token": token, "token_type": "bearer"}
 
 

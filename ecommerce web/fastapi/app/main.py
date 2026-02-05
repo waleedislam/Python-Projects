@@ -3,6 +3,8 @@ from app.db import init_db
 from app.product.routers.category import router as category_router
 from app.user.routers import router as user_router
 from app.product.routers.products import router as prod_router
+from app.cart.routers import router as cart_router
+from app.order.routers import router as order_router
 
 app = FastAPI()
 
@@ -32,4 +34,16 @@ app.include_router(
     user_router,
     prefix="/api/users",
     tags=["Users"]
+)
+
+app.include_router(
+    cart_router,
+    prefix="/api/cart",
+    tags=["Cart"]
+)
+
+app.include_router(
+    order_router,
+    prefix="/api/orders",
+    tags=["Orders"],
 )

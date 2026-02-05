@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post('/' , response_model=CategoryOut)
-async def category_create(session:SessionDep,category:CategoryCreate,current_user=Depends(admin_only)):
+async def category_create(session:SessionDep,category:CategoryCreate):
     return await create_category_in_db(session,category)
 
 @router.get("/get-all-categories",response_model=list[CategoryOut])
