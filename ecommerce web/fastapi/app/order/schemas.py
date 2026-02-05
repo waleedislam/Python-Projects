@@ -1,9 +1,9 @@
 # app/order/schemas.py
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from decimal import Decimal
-from app.order.models import OrderStatus
+from app.order.models import OrderStatus, PaymentMethod, PaymentMethod
 
 
 class OrderItemOut(BaseModel):
@@ -29,3 +29,13 @@ class OrderOut(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+class CheckoutRequest(BaseModel):
+    payment_method: PaymentMethod
+
+
+class CheckoutResponse(BaseModel):
+    order_id: int
+    status: OrderStatus
+    total_amount: float
+    client_secret: Optional[str] = None    

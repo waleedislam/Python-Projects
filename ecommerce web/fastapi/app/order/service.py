@@ -1,18 +1,27 @@
-# app/order/services.py
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
 
+import stripe
+
 from app.cart.models import Cart, CartItem
 from app.product.models import Product
-from app.order.models import Order, OrderItem, OrderStatus
+from app.order.models import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    PaymentMethod,
+)
+
+# stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 async def checkout_cart(
     db: AsyncSession,
     user_id: int,
-) -> Order:
+    payment_method: PaymentMethod,
+):
     # 1️⃣ Fetch cart with items & products
     result = await db.execute(
         select(Cart)
@@ -60,6 +69,7 @@ async def checkout_cart(
         user_id=user_id,
         total_amount=total_amount,
         status=OrderStatus.pending,
+        payment_method=payment_method,
     )
     db.add(order)
     await db.flush()  # get order.id
@@ -73,11 +83,33 @@ async def checkout_cart(
     for item in cart.items:
         item.product.stock_quantity -= item.quantity
 
-    # 6️⃣ Clear cart
+    client_secret = None
+
+    # 6️⃣ Payment handling
+    if payment_method == PaymentMethod.stripe:
+        intent = stripe.PaymentIntent.create(
+            amount=int(total_amount * 100),  # cents
+            currency="usd",
+            metadata={"order_id": order.id},
+        )
+        order.stripe_payment_intent_id = intent.id
+        client_secret = intent.client_secret
+
+    elif payment_method == PaymentMethod.cod:
+        # 🚚 Cash on Delivery → order is confirmed, NOT paid
+        order.status = OrderStatus.confirmed
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid payment method",
+        )
+
+    # 7️⃣ Clear cart
     await db.delete(cart)
 
-    # 7️⃣ Commit everything
+    # 8️⃣ Commit everything
     await db.commit()
     await db.refresh(order)
 
-    return order
+    return order, client_secret

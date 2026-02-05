@@ -14,15 +14,23 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 
 @router.post(
     "/checkout",
-    response_model=schemas.OrderOut,
-    status_code=status.HTTP_201_CREATED,
+    response_model=schemas.CheckoutResponse,
 )
 async def checkout(
+    data: schemas.CheckoutRequest,
     db: AsyncSession = Depends(SessionDep),
     current_user: User = Depends(get_current_user),
 ):
-    order = await service.checkout_cart(
+    order, client_secret = await service.checkout_cart(
         db=db,
         user_id=current_user.id,
+        payment_method=data.payment_method,
     )
-    return order
+
+    return {
+        "order_id": order.id,
+        "status": order.status,
+        "total_amount": order.total_amount,
+        "client_secret": client_secret,
+    }
+
