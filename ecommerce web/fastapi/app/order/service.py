@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -6,15 +8,13 @@ from fastapi import HTTPException, status
 import stripe
 
 from app.cart.models import Cart, CartItem
-from app.product.models import Product
 from app.order.models import (
     Order,
     OrderItem,
     OrderStatus,
     PaymentMethod,
 )
-
-# stripe.api_key = settings.STRIPE_SECRET_KEY
+from app.core.config import settings
 
 
 async def checkout_cart(
@@ -22,7 +22,7 @@ async def checkout_cart(
     user_id: int,
     payment_method: PaymentMethod,
 ):
-    # 1️⃣ Fetch cart with items & products
+    # 1️⃣ Load cart
     result = await db.execute(
         select(Cart)
         .where(Cart.user_id == user_id)
@@ -38,7 +38,7 @@ async def checkout_cart(
             detail="Cart is empty",
         )
 
-    total_amount = 0
+    total_amount = Decimal("0.00")
     order_items: list[OrderItem] = []
 
     # 2️⃣ Validate stock & calculate totals
@@ -51,30 +51,34 @@ async def checkout_cart(
                 detail=f"Insufficient stock for {product.title}",
             )
 
-        subtotal = product.price * item.quantity
+        price = Decimal(str(product.price))  # ✅ FIX
+        quantity = Decimal(item.quantity)
+
+        subtotal = price * quantity
         total_amount += subtotal
 
         order_items.append(
             OrderItem(
                 product_id=product.id,
                 product_title=product.title,
-                price=product.price,
+                price=price,
                 quantity=item.quantity,
                 subtotal=subtotal,
             )
         )
 
-    # 3️⃣ Create Order
+    # 3️⃣ Create order
     order = Order(
         user_id=user_id,
         total_amount=total_amount,
         status=OrderStatus.pending,
         payment_method=payment_method,
+        payment_status="pending",
     )
     db.add(order)
-    await db.flush()  # get order.id
+    await db.flush()
 
-    # 4️⃣ Attach order items
+    # 4️⃣ Attach items
     for item in order_items:
         item.order_id = order.id
         db.add(item)
@@ -87,17 +91,26 @@ async def checkout_cart(
 
     # 6️⃣ Payment handling
     if payment_method == PaymentMethod.stripe:
+        if not settings.STRIPE_SECRET_KEY:
+            raise HTTPException(
+                status_code=500,
+                detail="Stripe is not configured",
+            )
+
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+
         intent = stripe.PaymentIntent.create(
-            amount=int(total_amount * 100),  # cents
+            amount=int(total_amount * 100),
             currency="usd",
-            metadata={"order_id": order.id},
+            metadata={"order_id": str(order.id)},
         )
+
         order.stripe_payment_intent_id = intent.id
         client_secret = intent.client_secret
 
     elif payment_method == PaymentMethod.cod:
-        # 🚚 Cash on Delivery → order is confirmed, NOT paid
         order.status = OrderStatus.confirmed
+        order.payment_status = "pending"
 
     else:
         raise HTTPException(
@@ -106,9 +119,11 @@ async def checkout_cart(
         )
 
     # 7️⃣ Clear cart
+    for item in cart.items:
+        await db.delete(item)
     await db.delete(cart)
 
-    # 8️⃣ Commit everything
+    # 8️⃣ Commit
     await db.commit()
     await db.refresh(order)
 

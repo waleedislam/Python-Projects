@@ -2,6 +2,7 @@
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import (
+    Column,
     Integer,
     ForeignKey,
     String,
@@ -37,7 +38,8 @@ class Order(Base):
     payment_method: Mapped[PaymentMethod] = mapped_column(
     Enum(PaymentMethod),
     nullable=False,
-)
+ )
+    payment_status = Column(String(50), nullable=False, default="pending")   
 
     total_amount: Mapped[float] = mapped_column(
         Numeric(10, 2),

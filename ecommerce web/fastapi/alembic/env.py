@@ -1,12 +1,11 @@
 import asyncio
-from logging.config import fileConfig
 import os
+from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
 from dotenv import load_dotenv
 
 # -------------------------------------------------
@@ -17,13 +16,16 @@ load_dotenv()
 DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_NAME = os.getenv("DB_NAME")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "3306")
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT = os.getenv("DB_PORT", "5432")
 
 DATABASE_URL = (
-    f"mysql+aiomysql://{DB_USER}:{DB_PASS}"
+    f"postgresql+asyncpg://{DB_USER}:{DB_PASS}"
     f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
+
+# 🔴 CRITICAL FIX: escape % for Alembic ConfigParser
+DATABASE_URL = DATABASE_URL.replace("%", "%%")
 
 # -------------------------------------------------
 # Alembic Config
@@ -39,7 +41,7 @@ config.set_main_option("sqlalchemy.url", DATABASE_URL)
 # Import Base & Models (VERY IMPORTANT)
 # -------------------------------------------------
 from app.db.base import Base
-from app.db import models   # must import all models
+from app.db import models  # MUST import all models
 
 target_metadata = Base.metadata
 
@@ -58,7 +60,6 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
-
 # -------------------------------------------------
 # Online migrations (ASYNC)
 # -------------------------------------------------
@@ -72,7 +73,6 @@ def do_run_migrations(connection: Connection) -> None:
     with context.begin_transaction():
         context.run_migrations()
 
-
 async def run_async_migrations() -> None:
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section),
@@ -85,10 +85,8 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
-
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
-
 
 # -------------------------------------------------
 # Entrypoint

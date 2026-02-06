@@ -164,7 +164,7 @@ async def update_cart_item_quantity(
             detail="Quantity must be greater than zero",
         )
 
-    if quantity > cart_item.product.stock:
+    if quantity > cart_item.product.stock_quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Not enough stock",
@@ -219,3 +219,5 @@ async def clear_cart(
     if cart:
         await db.delete(cart)
         await db.commit()
+
+#stock
