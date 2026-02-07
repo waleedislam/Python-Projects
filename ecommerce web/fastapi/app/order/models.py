@@ -12,11 +12,6 @@ from sqlalchemy import (
 from app.db.base import Base
 import enum
 
-
-class PaymentMethod(str, enum.Enum):
-    stripe = "stripe"
-    cod = "cod"
-
 class OrderStatus(str, enum.Enum):
     pending = "pending"
     paid = "paid"
@@ -34,24 +29,12 @@ class Order(Base):
         Enum(OrderStatus),
         default=OrderStatus.pending,
         nullable=False,
-    )
-    payment_method: Mapped[PaymentMethod] = mapped_column(
-    Enum(PaymentMethod),
-    nullable=False,
- )
-    payment_status = Column(String(50), nullable=False, default="pending")   
+    ) 
 
     total_amount: Mapped[float] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )
-
-    stripe_payment_intent_id: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
-        index=True,
-    )
-
     items = relationship(
         "OrderItem",
         back_populates="order",
