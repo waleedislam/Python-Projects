@@ -33,3 +33,16 @@ class CheckoutResponse(BaseModel):
     order_id: int
     status: OrderStatus
     total_amount: Decimal
+
+class OrderResponse(OrderOut):
+    pass
+
+
+class OrderListResponse(BaseModel):
+    orders: list[OrderResponse]
+
+
+class CancelOrderResponse(BaseModel):
+    message: str
+    order_id: int
+    status: str

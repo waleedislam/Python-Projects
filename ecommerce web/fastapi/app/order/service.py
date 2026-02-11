@@ -91,3 +91,58 @@ async def checkout_cart(
     await db.refresh(order)
 
     return order
+
+# 1️⃣ Get My Orders
+async def get_user_orders(db: AsyncSession, user_id: int):
+    result = await db.execute(
+        select(Order)
+        .where(Order.user_id == user_id)
+        .order_by(Order.created_at.desc())
+    )
+    return result.scalars().all()
+
+# 2️⃣ Get Single Order
+async def get_single_order(db: AsyncSession, user_id: int, order_id: int):
+    result = await db.execute(
+        select(Order).where(
+            Order.id == order_id,
+            Order.user_id == user_id
+        )
+    )
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+
+    return order
+
+# 3️⃣ Cancel Order
+async def cancel_order(db: AsyncSession, user_id: int, order_id: int):
+    result = await db.execute(
+        select(Order).where(
+            Order.id == order_id,
+            Order.user_id == user_id
+        )
+    )
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+
+    if order.status not in ["pending", "accepted"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Order cannot be cancelled at this stage"
+        )
+
+    order.status = "cancelled"
+    await db.commit()
+    await db.refresh(order)
+
+    return order
