@@ -96,6 +96,7 @@ async def checkout_cart(
 async def get_user_orders(db: AsyncSession, user_id: int):
     result = await db.execute(
         select(Order)
+        .options(selectinload(Order.items))
         .where(Order.user_id == user_id)
         .order_by(Order.created_at.desc())
     )
